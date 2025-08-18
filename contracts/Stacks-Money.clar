@@ -54,7 +54,7 @@
       recipient: recipient,
       yes-votes: u0,
       no-votes: u0,
-      end-block: (+ block-height u144),
+      end-block: (+ stacks-block-height u144),
       executed: false
     })
     (var-set proposal-nonce proposal-id)
@@ -65,7 +65,7 @@
 (define-public (vote (proposal-id uint) (vote-yes bool))
   (let ((proposal (unwrap! (map-get? proposals proposal-id) err-proposal-not-found)))
     (asserts! (is-member tx-sender) err-not-member)
-    (asserts! (< block-height (get end-block proposal)) err-voting-ended)
+    (asserts! (< stacks-block-height (get end-block proposal)) err-voting-ended)
     (asserts! (is-none (map-get? member-votes { proposal-id: proposal-id, voter: tx-sender })) (err u105))
     
     (map-set member-votes { proposal-id: proposal-id, voter: tx-sender } true)
@@ -80,7 +80,7 @@
 
 (define-public (execute-proposal (proposal-id uint))
   (let ((proposal (unwrap! (map-get? proposals proposal-id) err-proposal-not-found)))
-    (asserts! (>= block-height (get end-block proposal)) (err u106))
+    (asserts! (>= stacks-block-height (get end-block proposal)) (err u106))
     (asserts! (not (get executed proposal)) (err u107))
     (asserts! (> (get yes-votes proposal) (get no-votes proposal)) (err u108))
     (asserts! (>= (ft-get-balance sbtc-token (as-contract tx-sender)) (get amount proposal)) err-insufficient-funds)

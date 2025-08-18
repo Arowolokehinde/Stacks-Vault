@@ -7,7 +7,7 @@ cache_dir = './.cache'
 requirements = []
 [contracts.Stacks-Money]
 path = 'contracts/Stacks-Money.clar'
-clarity_version = 2
+clarity_version = 3
 epoch = 3.1
 [repl.analysis]
 passes = ['check_checker']
