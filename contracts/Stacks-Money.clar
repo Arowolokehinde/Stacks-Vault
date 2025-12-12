@@ -207,6 +207,70 @@
   )
 )
 
+;; Cancel proposal before voting ends (Clarity 4 - uses stacks-block-time)
+(define-public (cancel-proposal (proposal-id uint))
+  (let ((proposal (unwrap! (map-get? proposals proposal-id) err-proposal-not-found)))
+    (asserts! (is-eq tx-sender (get creator proposal)) (err u301))
+    (asserts! (< stacks-block-time (get end-timestamp proposal)) err-voting-ended)
+    (asserts! (not (get executed proposal)) err-already-executed)
+    (map-set proposals proposal-id (merge proposal {
+      executed: true,
+      end-timestamp: stacks-block-time
+    }))
+    (ok true)
+  )
+)
+
+;; Delegate voting power with passkey (secp256r1-verify - Clarity 4)
+(define-map delegations { delegator: principal, proposal-id: uint } principal)
+
+(define-public (delegate-vote (proposal-id uint) (delegate principal) (message-hash (buff 32)) (signature (buff 64)))
+  (let (
+    (proposal (unwrap! (map-get? proposals proposal-id) err-proposal-not-found))
+    (passkey (unwrap! (map-get? member-passkeys tx-sender) err-passkey-not-found))
+  )
+    (asserts! (secp256r1-verify message-hash signature passkey) err-invalid-signature)
+    (asserts! (is-member tx-sender) err-not-member)
+    (asserts! (is-member delegate) err-not-member)
+    (asserts! (< stacks-block-time (get end-timestamp proposal)) err-voting-ended)
+    (asserts! (is-none (map-get? member-votes { proposal-id: proposal-id, voter: tx-sender })) err-already-voted)
+    (map-set delegations { delegator: tx-sender, proposal-id: proposal-id } delegate)
+    (ok true)
+  )
+)
+
+;; Execute delegated vote
+(define-public (execute-delegated-vote (proposal-id uint) (delegator principal) (vote-yes bool))
+  (let (
+    (proposal (unwrap! (map-get? proposals proposal-id) err-proposal-not-found))
+    (delegate (unwrap! (map-get? delegations { delegator: delegator, proposal-id: proposal-id }) (err u302)))
+  )
+    (asserts! (is-eq tx-sender delegate) (err u303))
+    (asserts! (< stacks-block-time (get end-timestamp proposal)) err-voting-ended)
+    (asserts! (is-none (map-get? member-votes { proposal-id: proposal-id, voter: delegator })) err-already-voted)
+
+    (map-set member-votes { proposal-id: proposal-id, voter: delegator } true)
+
+    (if vote-yes
+      (map-set proposals proposal-id (merge proposal { yes-votes: (+ (get yes-votes proposal) u1) }))
+      (map-set proposals proposal-id (merge proposal { no-votes: (+ (get no-votes proposal) u1) }))
+    )
+    (ok true)
+  )
+)
+
+;; Emergency withdraw for proposal creator if rejected (Clarity 4 - uses stacks-block-time)
+(define-public (withdraw-rejected-proposal (proposal-id uint))
+  (let ((proposal (unwrap! (map-get? proposals proposal-id) err-proposal-not-found)))
+    (asserts! (is-eq tx-sender (get creator proposal)) (err u304))
+    (asserts! (>= stacks-block-time (get end-timestamp proposal)) err-voting-not-ended)
+    (asserts! (not (get executed proposal)) err-already-executed)
+    (asserts! (<= (get yes-votes proposal) (get no-votes proposal)) (err u305))
+    (map-set proposals proposal-id (merge proposal { executed: true }))
+    (ok true)
+  )
+)
+
 ;; additional read-only functions
 (define-read-only (get-treasury-balance)
   (ft-get-balance sbtc-token tx-sender)
@@ -264,33 +328,4 @@
       })
     err-proposal-not-found
   )
-)
-
-;; Get proposal ID as ASCII string (to-ascii? - Clarity 4)
-(define-read-only (get-proposal-id-as-string (proposal-id uint))
-  (to-ascii? proposal-id)
-)
-
-;; Get formatted proposal info with ASCII labels (to-ascii? - Clarity 4)
-(define-read-only (get-proposal-summary (proposal-id uint))
-  (match (map-get? proposals proposal-id)
-    proposal
-      (ok {
-        id-string: (unwrap! (to-ascii? proposal-id) (err u200)),
-        yes-string: (unwrap! (to-ascii? (get yes-votes proposal)) (err u201)),
-        no-string: (unwrap! (to-ascii? (get no-votes proposal)) (err u202)),
-        executed-string: (unwrap! (to-ascii? (get executed proposal)) (err u203))
-      })
-    err-proposal-not-found
-  )
-)
-
-;; Verify if contract is trusted (Clarity 4)
-(define-read-only (is-trusted-contract (contract principal))
-  (default-to false (map-get? trusted-contracts contract))
-)
-
-;; Check if member has passkey registered
-(define-read-only (has-passkey (member principal))
-  (is-some (map-get? member-passkeys member))
 )
