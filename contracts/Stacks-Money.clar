@@ -271,6 +271,48 @@
   )
 )
 
+;; Extend voting period (Clarity 4 - uses stacks-block-time)
+(define-public (extend-voting-period (proposal-id uint) (additional-seconds uint))
+  (let ((proposal (unwrap! (map-get? proposals proposal-id) err-proposal-not-found)))
+    (asserts! (is-eq tx-sender (get creator proposal)) (err u306))
+    (asserts! (< stacks-block-time (get end-timestamp proposal)) err-voting-ended)
+    (asserts! (not (get executed proposal)) err-already-executed)
+    (asserts! (<= additional-seconds u172800) (err u307)) ;; max 48 hours extension
+    (map-set proposals proposal-id (merge proposal {
+      end-timestamp: (+ (get end-timestamp proposal) additional-seconds)
+    }))
+    (ok true)
+  )
+)
+
+;; Revoke vote delegation (Clarity 4 - uses stacks-block-time)
+(define-public (revoke-delegation (proposal-id uint))
+  (let ((proposal (unwrap! (map-get? proposals proposal-id) err-proposal-not-found)))
+    (asserts! (is-member tx-sender) err-not-member)
+    (asserts! (< stacks-block-time (get end-timestamp proposal)) err-voting-ended)
+    (asserts! (is-some (map-get? delegations { delegator: tx-sender, proposal-id: proposal-id })) (err u308))
+    (map-delete delegations { delegator: tx-sender, proposal-id: proposal-id })
+    (ok true)
+  )
+)
+
+;; Bulk deposit for multiple members (Clarity 4)
+(define-public (bulk-deposit (recipients (list 20 principal)) (amounts (list 20 uint)))
+  (begin
+    (asserts! (is-member tx-sender) err-not-member)
+    (asserts! (is-eq (len recipients) (len amounts)) (err u309))
+    (ok (map bulk-deposit-helper recipients amounts))
+  )
+)
+
+;; Helper for bulk deposit
+(define-private (bulk-deposit-helper (recipient principal) (amount uint))
+  (match (ft-mint? sbtc-token amount recipient)
+    success true
+    error false
+  )
+)
+
 ;; additional read-only functions
 (define-read-only (get-treasury-balance)
   (ft-get-balance sbtc-token tx-sender)
