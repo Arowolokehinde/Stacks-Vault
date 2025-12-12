@@ -329,3 +329,32 @@
     err-proposal-not-found
   )
 )
+
+;; Get proposal ID as ASCII string (to-ascii? - Clarity 4)
+(define-read-only (get-proposal-id-as-string (proposal-id uint))
+  (to-ascii? proposal-id)
+)
+
+;; Get formatted proposal info with ASCII labels (to-ascii? - Clarity 4)
+(define-read-only (get-proposal-summary (proposal-id uint))
+  (match (map-get? proposals proposal-id)
+    proposal
+      (ok {
+        id-string: (unwrap! (to-ascii? proposal-id) (err u200)),
+        yes-string: (unwrap! (to-ascii? (get yes-votes proposal)) (err u201)),
+        no-string: (unwrap! (to-ascii? (get no-votes proposal)) (err u202)),
+        executed-string: (unwrap! (to-ascii? (get executed proposal)) (err u203))
+      })
+    err-proposal-not-found
+  )
+)
+
+;; Verify if contract is trusted (Clarity 4)
+(define-read-only (is-trusted-contract (contract principal))
+  (default-to false (map-get? trusted-contracts contract))
+)
+
+;; Check if member has passkey registered
+(define-read-only (has-passkey (member principal))
+  (is-some (map-get? member-passkeys member))
+)
