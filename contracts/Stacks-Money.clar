@@ -167,6 +167,46 @@
   )
 )
 
+;; Batch vote on multiple proposals (Clarity 4 - uses stacks-block-time)
+(define-public (batch-vote (proposal-ids (list 10 uint)) (votes (list 10 bool)))
+  (begin
+    (asserts! (is-member tx-sender) err-not-member)
+    (asserts! (is-eq (len proposal-ids) (len votes)) (err u300))
+    (ok (map batch-vote-helper proposal-ids votes))
+  )
+)
+
+;; Helper for batch voting
+(define-private (batch-vote-helper (proposal-id uint) (vote-yes bool))
+  (match (map-get? proposals proposal-id)
+    proposal
+      (if (and
+            (< stacks-block-time (get end-timestamp proposal))
+            (is-none (map-get? member-votes { proposal-id: proposal-id, voter: tx-sender })))
+        (begin
+          (map-set member-votes { proposal-id: proposal-id, voter: tx-sender } true)
+          (if vote-yes
+            (map-set proposals proposal-id (merge proposal { yes-votes: (+ (get yes-votes proposal) u1) }))
+            (map-set proposals proposal-id (merge proposal { no-votes: (+ (get no-votes proposal) u1) }))
+          )
+          true
+        )
+        false
+      )
+    false
+  )
+)
+
+;; Update member passkey (secp256r1-verify - Clarity 4)
+(define-public (update-passkey (new-public-key (buff 33)) (message-hash (buff 32)) (signature (buff 64)))
+  (let ((old-passkey (unwrap! (map-get? member-passkeys tx-sender) err-passkey-not-found)))
+    (asserts! (secp256r1-verify message-hash signature old-passkey) err-invalid-signature)
+    (asserts! (is-member tx-sender) err-not-member)
+    (map-set member-passkeys tx-sender new-public-key)
+    (ok true)
+  )
+)
+
 ;; additional read-only functions
 (define-read-only (get-treasury-balance)
   (ft-get-balance sbtc-token tx-sender)
