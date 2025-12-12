@@ -400,34 +400,3 @@
 (define-read-only (has-passkey (member principal))
   (is-some (map-get? member-passkeys member))
 )
-
-;; ;; Get delegation info (Clarity 4)
-;; (define-read-only (get-delegation (delegator principal) (proposal-id uint))
-;;   (map-get? delegations { delegator: delegator, proposal-id: proposal-id })
-;; )
-
-;; ;; Check if proposal can be extended (Clarity 4 - uses stacks-block-time)
-;; (define-read-only (can-extend-proposal (proposal-id uint))
-;;   (match (map-get? proposals proposal-id)
-;;     proposal
-;;       (ok {
-;;         can-extend: (and
-;;           (< stacks-block-time (get end-timestamp proposal))
-;;           (not (get executed proposal))
-;;         ),
-;;         time-until-deadline: (if (>= stacks-block-time (get end-timestamp proposal))
-;;           u0
-;;           (- (get end-timestamp proposal) stacks-block-time)
-;;         )
-;;       })
-;;     err-proposal-not-found
-;;   )
-;; )
-
-;; ;; Get active proposals info (Clarity 4 - uses stacks-block-time)
-;; (define-read-only (get-active-proposals-info)
-;;   (ok {
-;;     total-proposals: (var-get proposal-nonce),
-;;     current-time: stacks-block-time
-;;   })
-;; )
